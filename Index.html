@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Groundwork — Neighborhood Service Record Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f5f1; --panel:#ffffff; --ink:#1f2420; --ink-soft:#5c655e;
+    --line:#dcded7; --accent:#2f5d4f; --accent-soft:#e4ede9; --warn:#9a5a2b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#161a17; --panel:#1e231f; --ink:#e7ece8; --ink-soft:#9aa89f; --line:#333c35; --accent:#7fbfa4; --accent-soft:#22322b; --warn:#d99a5f; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif;}
+  header{padding:2rem 1.25rem 1rem; max-width:760px; margin:0 auto;}
+  h1{font-family:'Fraunces',serif; font-weight:600; font-size:clamp(1.8rem,6vw,2.4rem); margin:0 0 .35rem;}
+  header p{margin:0; color:var(--ink-soft); font-size:.95rem; max-width:52ch;}
+  .wrap{max-width:760px; margin:0 auto; padding:0 1.25rem 3rem;}
+  .search-box{
+    display:flex; flex-direction:column; gap:.6rem; margin:1.25rem 0 1.5rem;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:1rem;
+  }
+  input[type="text"]{
+    font:inherit; font-size:1rem; padding:.7rem .9rem;
+    border:1.5px solid var(--line); background:var(--bg); color:var(--ink); border-radius:6px;
+  }
+  .row{display:flex; gap:.6rem; flex-wrap:wrap;}
+  select{
+    font:inherit; font-size:.85rem; padding:.5rem .7rem; border-radius:6px;
+    border:1.5px solid var(--line); background:var(--bg); color:var(--ink-soft); flex:1; min-width:140px;
+  }
+  button{
+    font:inherit; font-weight:600; padding:.75rem 1rem; border-radius:6px;
+    border:none; background:var(--accent); color:#fff; cursor:pointer;
+  }
+  button:disabled{opacity:.6}
+  .summary{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:1.2rem 1.3rem; margin-bottom:1.1rem;}
+  .summary h2{font-family:'Fraunces',serif; font-weight:600; font-size:1.15rem; margin:0 0 .8rem; word-break:break-word;}
+  .stat-row{display:flex; gap:1.5rem; flex-wrap:wrap;}
+  .stat .n{font-family:'Fraunces',serif; font-size:1.6rem; font-weight:600; color:var(--accent);}
+  .stat .l{font-size:.78rem; color:var(--ink-soft); margin-top:.1rem;}
+  .breakdown{margin-top:1rem; font-size:.85rem; color:var(--ink-soft); max-height:220px; overflow-y:auto;}
+  .bd-row{display:flex; justify-content:space-between; padding:.3rem 0; border-top:1px solid var(--line);}
+  .bd-row span:last-child{color:var(--ink); font-weight:500;}
+  .case{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:.9rem 1.05rem; margin-bottom:.6rem;}
+  .case-top{display:flex; justify-content:space-between; gap:.6rem; flex-wrap:wrap;}
+  .case-name{font-weight:600; font-size:.95rem;}
+  .case-status{font-size:.75rem; padding:.15rem .5rem; border-radius:20px; background:var(--accent-soft); color:var(--accent); white-space:nowrap;}
+  .case-status.open{background:#f5e6da; color:var(--warn);}
+  .case-addr{font-size:.83rem; color:var(--ink-soft); margin-top:.2rem;}
+  .case-note{font-size:.82rem; margin-top:.3rem; color:var(--ink-soft); font-style:italic;}
+  .status-msg{text-align:center; color:var(--ink-soft); padding:2rem 1rem; font-style:italic;}
+  .error{color:var(--warn);}
+  .load-more{width:100%; margin-top:.5rem; background:var(--panel); color:var(--accent); border:1.5px solid var(--accent);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Groundwork</h1>
+  <p>Check a San Francisco address's real 311 service history — encampments, sewer issues, dumping, graffiti — before you look at a place there.</p>
+</header>
+
+<div class="wrap">
+  <div class="search-box">
+    <input type="text" id="address" placeholder="Enter a San Francisco address…" value="1 Market St, San Francisco, CA">
+    <div class="row">
+      <select id="radius">
+        <option value="100">100m radius</option>
+        <option value="200" selected>200m radius</option>
+        <option value="400">400m radius</option>
+      </select>
+      <select id="years">
+        <option value="2">Last 2 years</option>
+        <option value="5" selected>Last 5 years</option>
+      </select>
+    </div>
+    <button id="go" onclick="runSearch()">Check this address</button>
+  </div>
+
+  <div id="output"><div class="status-msg">Enter an address above and tap "Check this address."</div></div>
+</div>
+
+<script>
+const API_BASE = "https://311-search.vercel.app/api/311-search";
+
+async function runSearch(){
+  const address = document.getElementById('address').value.trim();
+  const radius = document.getElementById('radius').value;
+  const years = document.getElementById('years').value;
+  const btn = document.getElementById('go');
+  const out = document.getElementById('output');
+
+  if(!address){ return; }
+
+  btn.disabled = true;
+  btn.textContent = "Checking…";
+  out.innerHTML = '<div class="status-msg">Looking up real 311 history — this takes a few seconds…</div>';
+
+  try{
+    const url = `${API_BASE}?address=${encodeURIComponent(address)}&radius=${radius}&years=${years}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if(!res.ok){
+      out.innerHTML = `<div class="status-msg error">${data.error || 'Something went wrong looking that up.'}</div>`;
+      return;
+    }
+
+    const catEntries = Object.entries(data.by_category || {}).sort((a,b)=>b[1]-a[1]);
+
+    let html = `
+      <div class="summary">
+        <h2>${data.address_matched}</h2>
+        <div class="stat-row">
+          <div class="stat"><div class="n">${data.total_cases}</div><div class="l">cases, last ${data.years_covered}y</div></div>
+          <div class="stat"><div class="n">${data.avg_days_to_close ?? '—'}</div><div class="l">avg. days to close</div></div>
+        </div>
+        <div class="breakdown">
+          ${catEntries.map(([k,v])=>`<div class="bd-row"><span>${k}</span><span>${v}</span></div>`).join('')}
+        </div>
+      </div>
+    `;
+
+    const cases = (data.cases || []).slice(0, 25);
+    cases.forEach(c=>{
+      const isOpen = c.status && c.status.toLowerCase().includes('open');
+      html += `
+        <div class="case">
+          <div class="case-top">
+            <span class="case-name">${c.service}${c.subtype ? ' · '+c.subtype : ''}</span>
+            <span class="case-status ${isOpen?'open':''}">${c.status || 'Unknown'}</span>
+          </div>
+          <div class="case-addr">${c.address || ''}</div>
+          ${c.detail ? `<div class="case-note">${c.detail}</div>` : ''}
+        </div>
+      `;
+    });
+
+    if(data.total_cases > 25){
+      html += `<div class="status-msg">Showing 25 of ${data.total_cases} cases in this radius.</div>`;
+    }
+
+    out.innerHTML = html;
+  } catch(err){
+    out.innerHTML = `<div class="status-msg error">Couldn't reach the lookup service. Try again in a moment.</div>`;
+  } finally{
+    btn.disabled = false;
+    btn.textContent = "Check this address";
+  }
+}
+</script>
+</body>
+</html>

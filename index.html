@@ -34,13 +34,17 @@
     font:inherit; font-size:.85rem; padding:.5rem .7rem; border-radius:6px;
     border:1.5px solid var(--line); background:var(--bg); color:var(--ink-soft); flex:1; min-width:140px;
   }
+  select#city{
+    font-weight:600; color:var(--ink); border-color:var(--accent); flex:none; width:100%;
+  }
   button{
     font:inherit; font-weight:600; padding:.75rem 1rem; border-radius:6px;
     border:none; background:var(--accent); color:#fff; cursor:pointer;
   }
   button:disabled{opacity:.6}
   .summary{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:1.2rem 1.3rem; margin-bottom:1.1rem;}
-  .summary h2{font-family:'Fraunces',serif; font-weight:600; font-size:1.15rem; margin:0 0 .8rem; word-break:break-word;}
+  .summary h2{font-family:'Fraunces',serif; font-weight:600; font-size:1.15rem; margin:0 0 .2rem; word-break:break-word;}
+  .summary .city-tag{font-size:.78rem; color:var(--accent); font-weight:600; text-transform:uppercase; letter-spacing:.03em; margin-bottom:.6rem; display:block;}
   .stat-row{display:flex; gap:1.5rem; flex-wrap:wrap;}
   .stat .n{font-family:'Fraunces',serif; font-size:1.6rem; font-weight:600; color:var(--accent);}
   .stat .l{font-size:.78rem; color:var(--ink-soft); margin-top:.1rem;}
@@ -56,19 +60,22 @@
   .case-note{font-size:.82rem; margin-top:.3rem; color:var(--ink-soft); font-style:italic;}
   .status-msg{text-align:center; color:var(--ink-soft); padding:2rem 1rem; font-style:italic;}
   .error{color:var(--warn);}
-  .load-more{width:100%; margin-top:.5rem; background:var(--panel); color:var(--accent); border:1.5px solid var(--accent);}
 </style>
 </head>
 <body>
 
 <header>
   <h1>Groundwork</h1>
-  <p>Check a San Francisco address's real 311 service history — encampments, sewer issues, dumping, graffiti — before you look at a place there.</p>
+  <p>Check an address's real 311 service history — encampments, sewer issues, dumping, graffiti — before you look at a place there.</p>
 </header>
 
 <div class="wrap">
   <div class="search-box">
-    <input type="text" id="address" placeholder="Enter a San Francisco address…" value="1 Market St, San Francisco, CA">
+    <select id="city" onchange="onCityChange()">
+      <option value="sf">San Francisco</option>
+      <option value="nyc">New York City</option>
+    </select>
+    <input type="text" id="address" placeholder="Enter an address…" value="1 Market St, San Francisco, CA">
     <div class="row">
       <select id="radius">
         <option value="100">100m radius</option>
@@ -83,13 +90,24 @@
     <button id="go" onclick="runSearch()">Check this address</button>
   </div>
 
-  <div id="output"><div class="status-msg">Enter an address above and tap "Check this address."</div></div>
+  <div id="output"><div class="status-msg">Pick a city, enter an address, and tap "Check this address."</div></div>
 </div>
 
 <script>
 const API_BASE = "https://311-search.vercel.app/api/311-search";
 
+const CITY_PLACEHOLDERS = {
+  sf: "1 Market St, San Francisco, CA",
+  nyc: "350 5th Ave, New York, NY",
+};
+
+function onCityChange(){
+  const city = document.getElementById('city').value;
+  document.getElementById('address').value = CITY_PLACEHOLDERS[city] || '';
+}
+
 async function runSearch(){
+  const city = document.getElementById('city').value;
   const address = document.getElementById('address').value.trim();
   const radius = document.getElementById('radius').value;
   const years = document.getElementById('years').value;
@@ -103,7 +121,7 @@ async function runSearch(){
   out.innerHTML = '<div class="status-msg">Looking up real 311 history — this takes a few seconds…</div>';
 
   try{
-    const url = `${API_BASE}?address=${encodeURIComponent(address)}&radius=${radius}&years=${years}`;
+    const url = `${API_BASE}?city=${city}&address=${encodeURIComponent(address)}&radius=${radius}&years=${years}`;
     const res = await fetch(url);
     const data = await res.json();
 
@@ -116,6 +134,7 @@ async function runSearch(){
 
     let html = `
       <div class="summary">
+        <span class="city-tag">${data.city || ''}</span>
         <h2>${data.address_matched}</h2>
         <div class="stat-row">
           <div class="stat"><div class="n">${data.total_cases}</div><div class="l">cases, last ${data.years_covered}y</div></div>
